@@ -27,3 +27,9 @@ func WithStderr(stderr io.Writer) PromptOption {
 		p.stderr = stderr
 	}
 }
+
+func WithHome(home string) PromptOption {
+	return func(p *Prompt) {
+		p.home = home
+	}
+}

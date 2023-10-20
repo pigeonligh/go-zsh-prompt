@@ -3,11 +3,16 @@ package gozshprompt
 import (
 	"bytes"
 	"context"
+	_ "embed"
 	"fmt"
 	"io"
 	"os"
 	"os/exec"
+	"path"
 )
+
+//go:embed zshrc
+var zshrc []byte
 
 type Handler func(ctx context.Context, input string) error
 
@@ -47,6 +52,10 @@ func (p *Prompt) SetHandler(h Handler) {
 	p.handler = h
 }
 
+func (p *Prompt) SetHome(h string) {
+	p.home = h
+}
+
 func (p *Prompt) SetStdin(stdin io.Reader) {
 	p.stdin = stdin
 }
@@ -84,15 +93,32 @@ func (p *Prompt) handle(ctx context.Context, input string) error {
 	if p.handler != nil {
 		return p.handler(ctx, input)
 	}
-	fmt.Fprintln(p.stderr, "Do nothing.")
+	fmt.Fprintln(p.GetStderr(), "Do nothing.")
 	return nil
 }
 
 func (p *Prompt) Run(ctx context.Context) error {
+	if p.home == "" {
+		var err error
+		p.home, err = os.MkdirTemp("", "gozshprompt")
+		if err != nil {
+			return fmt.Errorf("failed to create temporary home: %w", err)
+		}
+	}
+	if _, err := os.Stat(path.Join(p.home, ".zshrc")); err != nil {
+		// write zshrc to $HOME/.zshrc
+		err = os.WriteFile(path.Join(p.home, ".zshrc"), zshrc, os.ModePerm)
+		if err != nil {
+			return fmt.Errorf("failed to configure home: %w", err)
+		}
+	}
+
 	parentRead, parentWrite, childRead, childWrite, err := pipe()
 	if err != nil {
 		return err
 	}
+	defer parentWrite.Close()
+	defer childWrite.Close()
 
 	cmd := exec.CommandContext(ctx, p.executable)
 	cmd.Env = []string{
@@ -126,7 +152,7 @@ func (p *Prompt) Run(ctx context.Context) error {
 					// error
 					return
 				}
-				_, _ = parentWrite.Write([]byte{0})
+				_, _ = parentWrite.Write([]byte("\n"))
 
 				buffer = buffer[i+1:]
 			}
