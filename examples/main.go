@@ -2,15 +2,30 @@ package main
 
 import (
 	"context"
+	"fmt"
+	"os"
+	"path/filepath"
 
 	gozshprompt "github.com/pigeonligh/go-zsh-prompt"
 )
 
 func main() {
-	prompt, err := gozshprompt.NewFromPath()
+	home, err := filepath.Abs(".home")
 	if err != nil {
-		panic(err)
+		fmt.Fprintln(os.Stderr, err)
 	}
 
-	prompt.Run(context.Background())
+	prompt := gozshprompt.New(
+		"zsh",
+		gozshprompt.WithHome(home),
+		gozshprompt.WithHandler(func(ctx context.Context, input string) error {
+			fmt.Printf("Solve %v\n", input)
+			return nil
+		}),
+	)
+
+	err = prompt.Run(context.Background())
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+	}
 }

@@ -105,6 +105,9 @@ func (p *Prompt) Run(ctx context.Context) error {
 			return fmt.Errorf("failed to create temporary home: %w", err)
 		}
 	}
+	if err := os.MkdirAll(p.home, os.ModePerm); err != nil {
+		return fmt.Errorf("failed to create home: %w", err)
+	}
 	if _, err := os.Stat(path.Join(p.home, ".zshrc")); err != nil {
 		// write zshrc to $HOME/.zshrc
 		err = os.WriteFile(path.Join(p.home, ".zshrc"), zshrc, os.ModePerm)
@@ -159,5 +162,10 @@ func (p *Prompt) Run(ctx context.Context) error {
 		}
 	}(routineCtx)
 
-	return cmd.Run()
+	if err := cmd.Run(); err != nil {
+		if err, ok := err.(*exec.ExitError); ok && err.ExitCode() != 130 {
+			return err
+		}
+	}
+	return nil
 }
