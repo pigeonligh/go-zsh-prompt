@@ -10,6 +10,12 @@ func WithHandler(h Handler) PromptOption {
 	}
 }
 
+func WithSuggestHandler(sh SuggestHandler) PromptOption {
+	return func(p *Prompt) {
+		p.suggestHandler = sh
+	}
+}
+
 func WithStdin(stdin io.Reader) PromptOption {
 	return func(p *Prompt) {
 		p.stdin = stdin
