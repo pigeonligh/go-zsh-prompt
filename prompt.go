@@ -9,14 +9,10 @@ import (
 	"os"
 	"os/exec"
 	"path"
-	"strconv"
 )
 
 //go:embed zshrc
 var zshrc []byte
-
-type Handler func(ctx context.Context, input string) error
-type SuggestHandler func(ctx context.Context, input string, cursor int) string
 
 type Prompt struct {
 	executable string
@@ -26,8 +22,7 @@ type Prompt struct {
 	stdout io.Writer
 	stderr io.Writer
 
-	handler        Handler
-	suggestHandler SuggestHandler
+	handlers *handlers
 }
 
 func NewFromPath(options ...PromptOption) (*Prompt, error) {
@@ -42,6 +37,7 @@ func NewFromPath(options ...PromptOption) (*Prompt, error) {
 func New(executable string, options ...PromptOption) *Prompt {
 	p := &Prompt{
 		executable: executable,
+		handlers:   &handlers{},
 	}
 
 	for _, option := range options {
@@ -52,11 +48,15 @@ func New(executable string, options ...PromptOption) *Prompt {
 }
 
 func (p *Prompt) SetHandler(h Handler) {
-	p.handler = h
+	p.handlers.handler = h
 }
 
-func (p *Prompt) SetSuggestHandler(sh SuggestHandler) {
-	p.suggestHandler = sh
+func (p *Prompt) SetInitHandler(h InitHandler) {
+	p.handlers.init = h
+}
+
+func (p *Prompt) SetSuggestHandler(h SuggestHandler) {
+	p.handlers.suggest = h
 }
 
 func (p *Prompt) SetHome(h string) {
@@ -96,21 +96,6 @@ func (p *Prompt) GetStderr() io.Writer {
 	return os.Stderr
 }
 
-func (p *Prompt) handle(ctx context.Context, input string) error {
-	if p.handler != nil {
-		return p.handler(ctx, input)
-	}
-	fmt.Fprintln(p.GetStderr(), "Do nothing.")
-	return nil
-}
-
-func (p *Prompt) handleSuggest(ctx context.Context, input string, cursor int) string {
-	if p.suggestHandler != nil {
-		return p.suggestHandler(ctx, input, cursor)
-	}
-	return input
-}
-
 func (p *Prompt) Run(ctx context.Context) error {
 	if p.home == "" {
 		var err error
@@ -137,13 +122,6 @@ func (p *Prompt) Run(ctx context.Context) error {
 	defer parentWrite.Close()
 	defer childWrite.Close()
 
-	parentSRead, parentSWrite, childSRead, childSWrite, err := pipe()
-	if err != nil {
-		return err
-	}
-	defer parentSWrite.Close()
-	defer childSWrite.Close()
-
 	cmd := exec.CommandContext(ctx, p.executable)
 	cmd.Env = []string{
 		"HOME=" + p.home,
@@ -151,8 +129,6 @@ func (p *Prompt) Run(ctx context.Context) error {
 	cmd.ExtraFiles = []*os.File{
 		childRead,
 		childWrite,
-		childSRead,
-		childSWrite,
 	}
 	cmd.Stdin = p.GetStdin()
 	cmd.Stdout = p.GetStdout()
@@ -172,45 +148,18 @@ func (p *Prompt) Run(ctx context.Context) error {
 			}
 			buffer = append(buffer, block[:n]...)
 
-			if i := bytes.IndexByte(buffer, 0); i != -1 {
-				err := p.handle(ctx, string(buffer[:i]))
-				if err != nil {
-					// error
-					return
-				}
-				_, _ = parentWrite.Write([]byte("\n"))
-
-				buffer = buffer[i+1:]
-			}
-		}
-	}(routineCtx)
-
-	go func(ctx context.Context) {
-		buffer := make([]byte, 0)
-		cursor := -1
-		for {
-			block := make([]byte, 4096)
-			n, err := parentSRead.Read(block)
-			if err != nil {
-				// error
-				return
-			}
-			buffer = append(buffer, block[:n]...)
-
 			for {
 				if i := bytes.IndexByte(buffer, 0); i != -1 {
-					if cursor == -1 {
-						cursor, _ = strconv.Atoi(string(buffer[:i]))
-						buffer = buffer[i+1:]
-					} else {
-						c := cursor
-						cursor = -1
-
-						newInput := p.handleSuggest(ctx, string(buffer[:i]), c)
-						_, _ = parentSWrite.WriteString(newInput + "\n")
-
-						buffer = buffer[i+1:]
+					writeString, err := p.handlers.solveInput(ctx, string(buffer[:i]))
+					if err != nil {
+						// error
+						return
 					}
+					if len(writeString) > 0 {
+						_, _ = parentWrite.WriteString(writeString)
+					}
+
+					buffer = buffer[i+1:]
 				} else {
 					break
 				}

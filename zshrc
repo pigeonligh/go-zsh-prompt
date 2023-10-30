@@ -2,9 +2,19 @@ export TERM=screen
 export PS1="> "
 cd $HOME
 
+function _init {
+    echo -n "init\0" >&4
+    read src <&3
+    source <(echo "$src")
+}
+
+_init
+
 function _send {
+    echo -n "handle\0" >&4
     echo -n "$@\0" >&4
-    read <&3
+    read src <&3
+    source <(echo "$src")
 }
 
 function __push_enter {
@@ -22,9 +32,10 @@ zle -N __push_enter
 bindkey '^M' __push_enter
 
 function _suggest {
-    echo -n "$1\0" >&6
-    echo -n "$2\0" >&6
-    read ret <&5
+    echo -n "suggest\0" >&4
+    echo -n "$1\0" >&4
+    echo -n "$2\0" >&4
+    read ret <&3
     echo -n $ret
 }
 

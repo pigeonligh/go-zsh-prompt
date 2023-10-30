@@ -6,13 +6,19 @@ type PromptOption func(*Prompt)
 
 func WithHandler(h Handler) PromptOption {
 	return func(p *Prompt) {
-		p.handler = h
+		p.handlers.handler = h
 	}
 }
 
-func WithSuggestHandler(sh SuggestHandler) PromptOption {
+func WithInitHandler(h InitHandler) PromptOption {
 	return func(p *Prompt) {
-		p.suggestHandler = sh
+		p.handlers.init = h
+	}
+}
+
+func WithSuggestHandler(h SuggestHandler) PromptOption {
+	return func(p *Prompt) {
+		p.handlers.suggest = h
 	}
 }
 

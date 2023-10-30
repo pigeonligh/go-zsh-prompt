@@ -19,9 +19,12 @@ func main() {
 
 	prompt, err := gozshprompt.NewFromPath(
 		gozshprompt.WithHome(home),
-		gozshprompt.WithHandler(func(ctx context.Context, input string) error {
+		gozshprompt.WithInitHandler(func(ctx context.Context) string {
+			return `export PS1="init > "`
+		}),
+		gozshprompt.WithHandler(func(ctx context.Context, input string) string {
 			fmt.Printf("Solve %v\n", input)
-			return nil
+			return `export PS1="` + input + ` > "`
 		}),
 		gozshprompt.WithSuggestHandler(func(ctx context.Context, input string, cursor int) string {
 			return strings.Join([]string{input[:cursor], ".", input[cursor:]}, "")
