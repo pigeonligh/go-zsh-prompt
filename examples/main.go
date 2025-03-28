@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 
 	gozshprompt "github.com/pigeonligh/go-zsh-prompt"
 )
@@ -26,8 +25,8 @@ func main() {
 			fmt.Printf("Solve %v\n", input)
 			return `export PS1="` + input + ` > "`
 		}),
-		gozshprompt.WithSuggestHandler(func(ctx context.Context, input string, cursor int) string {
-			return strings.Join([]string{input[:cursor], ".", input[cursor:]}, "")
+		gozshprompt.WithSuggestHandler(func(ctx context.Context, input string, cursor int) []string {
+			return []string{"hello1", "hello2", "hello3"}
 		}),
 	)
 	if err != nil {

@@ -1,4 +1,4 @@
-export TERM=screen
+export TERM=xterm-256color
 export PS1="> "
 cd $HOME
 
@@ -18,12 +18,19 @@ function _send {
 }
 
 function __push_enter {
-    if [ "$BUFFER" != "" ]; then
-        print -S "$BUFFER"
+    if [ -n "$BUFFER" ]; then
+        if [ "${BUFFER: -1}" != "\\" ]; then
+            print -S "$BUFFER"
 
-        echo ""
-        _send "$BUFFER"
-        BUFFER=""
+            echo ""
+            echo -n -e "\033[0J"
+            _send "$BUFFER"
+            BUFFER=""
+        else
+            BUFFER="${BUFFER:0:${#BUFFER}-1}"
+            echo -n "\n>  "
+            return
+        fi
     fi
     zle accept-line
 }
@@ -31,29 +38,50 @@ function __push_enter {
 zle -N __push_enter
 bindkey '^M' __push_enter
 
-function _suggest {
+_suggest() {
     echo -n "suggest\0" >&4
     echo -n "$1\0" >&4
     echo -n "$2\0" >&4
-    read ret <&3
-    echo -n $ret
+    echo "suggest $1 $2" >> ./log
+
+    while true; do
+        read ret <&3
+        echo "read $ret" >> ./log
+        if [ -z "$ret" ]; then
+            break
+        fi
+        echo "$ret"
+    done
 }
 
-function __push_tab {
-    if [ "$BUFFER" != "" ]; then
-        NEWBUF=$(_suggest $CURSOR "$BUFFER")
-        NEWCS=`expr $CURSOR + ${#NEWBUF} - ${#BUFFER}`
-        BUFFER=$NEWBUF
-        CURSOR=$NEWCS
-        # zle end-of-line
+_completion() {
+    local -a completions
+
+    completions=$(_suggest $CURSOR "$BUFFER")
+    completions=("${(f)completions}")
+
+    if (( ${#completions[@]} > 0 )); then
+        _describe 'custom completions' completions
+    else
+        compadd -- "No matches"
     fi
 }
 
-zle -N __push_tab
-bindkey '^I' __push_tab
+autoload -Uz compinit
+compinit
+for command completion in ${(kv)_comps:#-*(-|-,*)}; do
+    compdef -d "$command"
+    compdef -d "$completion"
+done
+compdef _completion -default-
+setopt no_list_rows_first
+setopt auto_menu
+setopt auto_list
 
 export HISTFILE=$HOME/.zsh_history
 export HISTSIZE=1000
 export SAVEHIST=1000
 setopt sharehistory
 setopt appendhistory
+
+export PATH=

@@ -4,11 +4,12 @@ import (
 	"context"
 	"fmt"
 	"strconv"
+	"strings"
 )
 
 type Handler func(ctx context.Context, input string) string
 type InitHandler func(ctx context.Context) string
-type SuggestHandler func(ctx context.Context, input string, cursor int) string
+type SuggestHandler func(ctx context.Context, input string, cursor int) []string
 
 type handlers struct {
 	p *Prompt
@@ -36,11 +37,11 @@ func (h *handlers) handleInit(ctx context.Context) string {
 	return ""
 }
 
-func (h *handlers) handleSuggest(ctx context.Context, input string, cursor int) string {
+func (h *handlers) handleSuggest(ctx context.Context, input string, cursor int) []string {
 	if h.suggest != nil {
 		return h.suggest(ctx, input, cursor)
 	}
-	return input
+	return []string{}
 }
 
 func (h *handlers) solveInput(ctx context.Context, input string) (string, error) {
@@ -68,10 +69,10 @@ func (h *handlers) solveInput(ctx context.Context, input string) (string, error)
 				h.suggestCursor, _ = strconv.Atoi(input)
 				return "", nil
 			} else {
-				newInput := h.handleSuggest(ctx, input, h.suggestCursor)
+				suggests := h.handleSuggest(ctx, input, h.suggestCursor)
 
 				h.handlerType = ""
-				return newInput + "\n", nil
+				return strings.Join(suggests, "\n") + "\n\n", nil
 			}
 		}
 	}
